@@ -32,6 +32,10 @@ public class MainClass {
 
     private static List<String> existingHeaders = new ArrayList<>();
 
+    private static String[] existingHeaderArray;
+
+    private static String[] tokenHeaderArray;
+
     private static Map<String, Map<String, String>> mappings = new TreeMap<>(); //They are formed as follows:  tokenHeader -> {originalRow -> tokenRow}
 
     private static List<String> tokenHeaderList = new ArrayList<>();
@@ -62,32 +66,46 @@ public class MainClass {
         createMappings(tokenFile);
         File dataDir = new File(data);
         File[] dataFiles = dataDir.listFiles();
+        CsvInputParser parser = new CsvInputParser(existingHeaderArray);
+        CsvInputRecord record;
         int counter = 0;
             for (File file : dataFiles) {
-                try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+                try {
                     System.out.println("Started writing file:" + counter);
-                    GZIPOutputStream zipWriter = new GZIPOutputStream(new FileOutputStream(new File("ModifiedDataFile" + counter + ".gz")));
+                    GZIPOutputStream zipWriter = new GZIPOutputStream(new FileOutputStream(new File(file.getName() + "_alt.gz")));
                     BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(zipWriter, StandardCharsets.UTF_8));
-                    String line;
-                    while((line = br.readLine()) != null){
-                        StringBuilder sb = new StringBuilder(line);
-                        String[] data = line.split(",");
-                        for(String target: targets){
-                            if(longMappings.containsKey(target)){
-                                try{
-                                    sb.append("," + longMappings.get(target).get(data[mapping.get(target)]));
+                    parser.beginParsing(file);
+                    while ((record = parser.parseNextRecord()) != null) {
+                        StringBuilder sb = new StringBuilder();
+                        for (String header : existingHeaders){
+                            if(existingHeaders.indexOf(header) != 0) {
+                                if(record.getString(header) != null && record.getString(header).contains("\"")){
+                                    sb.append("," + record.getString(header));
                                 }
-                                catch(NullPointerException e){
-                                    sb.append(",\"\"");
+                                else{
+                                    sb.append(",\"" + record.getString(header) + "\"");
                                 }
                             }
-                            else {
-                                try{
-                                    sb.append("," + mappings.get(target).get(data[mapping.get(target)]));
-                                }
-                                catch(NullPointerException e){
+                            else{
+                                sb.append("\"" + record.getString(header) + "\"");
+                            }
+                        }
+                        for (String target : targets) {
+                            if (longMappings.containsKey(target)) {
+                                Long key = longMappings.get(target).get(record.getString(targetSources.get(target)).toLowerCase());
+                                if (key != null) {
+                                    sb.append("," + key);
+                                } else {
                                     sb.append(",\"\"");
                                 }
+                            } else {
+                                String key = mappings.get(target).get(record.getString(targetSources.get(target)).toLowerCase());
+                                if (key != null) {
+                                    sb.append("," + key);
+                                } else {
+                                    sb.append(",\"\"");
+                                }
+
                             }
                         }
                         sb.append("\n");
@@ -96,19 +114,19 @@ public class MainClass {
                     counter += 1;
                     writer.close();
                     zipWriter.finish();
-                    System.out.println("Finished wiriting file:" + "ModifiedDataFile" + (counter - 1) + ".gz");
+                    System.out.println("Finished writing file:" + file + "_alt.gz");
                 }
                 catch(IOException e){
-                    log.error("unknown error: " + e.getMessage());
+                    log.error(e.getMessage());
                 }
             }
-        }
+    }
 
     private static void determineMappings(){
         String[] pieces = settings.split(",");
-        int count = pieces.length/2;
+        int count = pieces.length;
         for(int i = 0; i < count; i = i + 2){
-            mapping.put(pieces[i], existingHeaders.indexOf(pieces[i+1]));
+            mapping.put(pieces[i+1], existingHeaders.indexOf(pieces[i]));
             targetSources.put(pieces[i+1], pieces[i]);
             targets.add(pieces[i+1]);
         }
@@ -117,14 +135,15 @@ public class MainClass {
         File tokenFile = new File(file);
         CsvParserSettings settings = new CsvParserSettings();
         settings.detectFormatAutomatically();
+        settings.getFormat().setDelimiter('|');
+        settings.setQuoteDetectionEnabled(true);
+        settings.setHeaders(tokenHeaderArray);
         CsvParser parser = new CsvParser(settings);
         parser.beginParsing(tokenFile);
-        parser.parseNext();
         String[] record;
-        for(String target: targets){
-            mappings.put(target, new HashMap<>());
-            longMappings.put(target, new HashMap<>());
-        }
+        parser.parseNext();
+        mappings.put("hasTv", new HashMap<>());
+        longMappings.put("token", new HashMap<>());
         System.out.println("Started mapping");
         while ((record = parser.parseNext()) != null) {
             for(String target: targets){
@@ -139,11 +158,14 @@ public class MainClass {
         parser.stopParsing();
         System.out.println("Finished mapping");
     }
+
     private static void readHeaders(){
+        existingHeaderArray = headers.split(",");
         existingHeaders = new ArrayList<>(Arrays.asList(headers.split(",")));
         try(BufferedReader br = new BufferedReader(new FileReader(tokenFile))){
             String headerString = br.readLine();
             String[] headers = headerString.split("\\|");
+            tokenHeaderArray = headers;
             tokenHeaderList = new ArrayList<>(Arrays.asList(headers));
         }
         catch(FileNotFoundException e){
