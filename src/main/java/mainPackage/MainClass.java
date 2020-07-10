@@ -78,9 +78,6 @@ public class MainClass {
                     parser.beginParsing(file);
                     while ((record = parser.parseNextRecord()) != null) {
                         StringBuilder sb = new StringBuilder();
-                        if(record.getString("advertiser_id").equals("590B5DAF-1135-46D8-91D3-2052F19C4F0D")){
-                            System.out.println("õige");
-                        }
                         for (String header : existingHeaders){
                             String field = record.getString(header);
                             if(existingHeaders.indexOf(header) != 0) {
