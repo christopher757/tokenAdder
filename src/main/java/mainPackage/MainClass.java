@@ -1,5 +1,6 @@
 package mainPackage;
 
+import com.univocity.parsers.csv.CsvFormat;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 import lombok.extern.slf4j.Slf4j;
@@ -77,17 +78,22 @@ public class MainClass {
                     parser.beginParsing(file);
                     while ((record = parser.parseNextRecord()) != null) {
                         StringBuilder sb = new StringBuilder();
+                        if(record.getString("advertiser_id").equals("590B5DAF-1135-46D8-91D3-2052F19C4F0D")){
+                            System.out.println("õige");
+                        }
                         for (String header : existingHeaders){
+                            String field = record.getString(header);
                             if(existingHeaders.indexOf(header) != 0) {
-                                if(record.getString(header) != null && record.getString(header).contains("\"")){
-                                    sb.append("," + record.getString(header));
-                                }
-                                else{
-                                    sb.append(",\"" + record.getString(header) + "\"");
-                                }
+                                if(field != null && field.startsWith("\""))
+                                    sb.append(","+ field);
+                                else
+                                    sb.append(",\"" + field + "\"");
                             }
                             else{
-                                sb.append("\"" + record.getString(header) + "\"");
+                                if(field != null && field.startsWith("\""))
+                                    sb.append(field);
+                                else
+                                    sb.append("\"" + field + "\"");
                             }
                         }
                         for (String target : targets) {
